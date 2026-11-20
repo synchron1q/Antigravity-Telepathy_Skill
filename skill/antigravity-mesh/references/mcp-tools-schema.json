@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "ag-mesh": {
+      "command": "ag-mesh",
+      "args": ["mcp"]
+    }
+  },
+  "tools": [
+    "cluster_get_overview",
+    "cluster_list_sessions",
+    "cluster_search_context",
+    "cluster_read_session",
+    "cluster_publish_update",
+    "cluster_create_handoff",
+    "cluster_claim_handoff",
+    "cluster_manage_lock",
+    "cluster_start_pairing",
+    "cluster_join_with_token",
+    "cluster_pairing_status"
+  ],
+  "resources": [
+    "agmesh://cluster/overview",
+    "agmesh://nodes/{node_id}/sessions"
+  ]
+}

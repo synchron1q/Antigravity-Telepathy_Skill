@@ -1,0 +1,59 @@
+# Example: Distributed 5-Host P2P Mesh over WireGuard / Tailscale Overlay VPN
+
+[node]
+node_id = "laptop-linux"
+hostname = "laptop-linux"
+tags = ["linux", "wireguard", "mobile"]
+
+[network]
+topology = "p2p-mesh"
+role = "peer"
+# Bind specifically to local WireGuard interface IP
+listen_address = "10.66.0.2"
+listen_port = 47890
+enable_mdns_discovery = false
+cluster_psk_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+heartbeat_interval_ms = 5000
+peer_timeout_ms = 20000
+zstd_threshold_bytes = 256
+zstd_level = 6
+bandwidth_limit_kbps = 10240
+max_attachment_bytes = 4194304
+
+[privacy]
+metadata_only = false
+sanitize_secrets = true
+full_text_ttl_days = 45
+deny_globs = ["**/.env*", "**/id_rsa*", "**/*.pem"]
+
+[mcp]
+enable_http = true
+bind_address = "127.0.0.1"
+port = 47895
+enable_metrics = true
+
+[[peers]]
+node_id = "desktop-win"
+address = "10.66.0.1"
+port = 47890
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_DESKTOP"
+is_seed = true
+
+[[peers]]
+node_id = "macbook-arm64"
+address = "10.66.0.3"
+port = 47890
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_MACBOOK"
+
+[[peers]]
+node_id = "home-server"
+address = "10.66.0.4"
+port = 47890
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_HOME_SERVER"
+is_seed = true
+
+[[peers]]
+node_id = "cloud-builder"
+address = "10.66.0.5"
+port = 47890
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_CLOUD_BUILDER"

@@ -1,0 +1,45 @@
+# Example: Hub-and-Spoke Spoke Node Behind Strict NAT Connecting via Zero-Knowledge VPS Relay
+
+[node]
+node_id = "laptop-nat-1"
+hostname = "laptop-nat-1"
+tags = ["nat-spoke", "windows"]
+
+[network]
+topology = "hub-and-spoke"
+role = "peer"
+listen_address = "127.0.0.1"
+listen_port = 47890
+relay_endpoint = "relay.example.org:47890"
+enable_mdns_discovery = false
+cluster_psk_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+heartbeat_interval_ms = 4000
+peer_timeout_ms = 16000
+zstd_threshold_bytes = 512
+zstd_level = 5
+
+[privacy]
+sanitize_secrets = true
+full_text_ttl_days = 30
+
+# Relay Hub Coordinator (routes opaque E2EE RelayEnvelope frames, cannot decrypt contents)
+[[peers]]
+node_id = "vps-relay"
+address = "relay.example.org"
+port = 47890
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_VPS_RELAY"
+is_relay = true
+is_seed = true
+
+# Other spokes (reached via vps-relay using end-to-end AEAD encryption)
+[[peers]]
+node_id = "desktop-home"
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_DESKTOP_HOME"
+
+[[peers]]
+node_id = "office-mac"
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_OFFICE_MAC"
+
+[[peers]]
+node_id = "gpu-server"
+pubkey_fingerprint = "REPLACE_WITH_FINGERPRINT_GPU_SERVER"

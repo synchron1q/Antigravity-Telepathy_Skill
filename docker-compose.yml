@@ -1,0 +1,15 @@
+services:
+  relay-hub:
+    build: .
+    container_name: ag-mesh-relay
+    restart: unless-stopped
+    ports:
+      - "47890:47890"
+      - "127.0.0.1:47895:47895"
+    volumes:
+      - agmesh_relay_data:/home/agmesh/.local/share/ag-mesh
+      - ./examples/hub-and-spoke-vps.toml:/home/agmesh/.config/ag-mesh/config.toml:ro
+    command: ["daemon", "--config", "/home/agmesh/.config/ag-mesh/config.toml"]
+
+volumes:
+  agmesh_relay_data:

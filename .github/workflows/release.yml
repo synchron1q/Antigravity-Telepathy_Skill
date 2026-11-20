@@ -1,0 +1,105 @@
+name: Release Static Artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Release ${{ matrix.target }}
+    strategy:
+      matrix:
+        include:
+          - target: linux-x86_64
+            os: ubuntu-24.04
+            preset: linux-release
+            ext: tar.gz
+            bin: ag-mesh
+          - target: linux-arm64
+            os: ubuntu-24.04-arm
+            preset: linux-release
+            ext: tar.gz
+            bin: ag-mesh
+          - target: macos-arm64
+            os: macos-14
+            preset: macos-release
+            ext: tar.gz
+            bin: ag-mesh
+          - target: windows-x86_64
+            os: windows-2022
+            preset: windows-msvc-release
+            ext: zip
+            bin: Release/ag-mesh.exe
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libssl-dev
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja openssl@3
+
+      - name: Ensure MSVC OpenSSL on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:/Program Files/OpenSSL/include/openssl/evp.h") -and -not (Test-Path "C:/Program Files/OpenSSL-Win64/include/openssl/evp.h")) {
+            choco install openssl --no-progress -y
+          }
+
+      - name: Configure & Build Static Release
+        shell: bash
+        run: |
+          EXTRA=""
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            EXTRA="-DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            if [ -d "C:/Program Files/OpenSSL-Win64/include/openssl" ]; then
+              EXTRA="-DOPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64"
+            elif [ -d "C:/Program Files/OpenSSL/include/openssl" ]; then
+              EXTRA="-DOPENSSL_ROOT_DIR=C:/Program Files/OpenSSL"
+            fi
+          fi
+          cmake --preset ${{ matrix.preset }} -DAGMESH_STATIC_LINK=ON -DAGMESH_BUILD_TESTS=OFF ${EXTRA}
+          cmake --build --preset ${{ matrix.preset }} --parallel
+
+      - name: Package Binary + Skill + Docs (POSIX)
+        if: runner.os != 'Windows'
+        run: |
+          PKG="ag-mesh-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir -p "dist/${PKG}/skill"
+          cp "build/${{ matrix.preset }}/${{ matrix.bin }}" "dist/${PKG}/ag-mesh"
+          cp -R skill/antigravity-mesh "dist/${PKG}/skill/"
+          cp README.md LICENSE PROTOCOL.md "dist/${PKG}/"
+          (cd dist && tar -czf "${PKG}.tar.gz" "${PKG}" && sha256sum "${PKG}.tar.gz" > "${PKG}.tar.gz.sha256")
+
+      - name: Package Binary + Skill + Docs (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $pkg = "ag-mesh-${{ github.ref_name }}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Force -Path "dist/$pkg/skill" | Out-Null
+          Copy-Item "build/${{ matrix.preset }}/${{ matrix.bin }}" "dist/$pkg/ag-mesh.exe"
+          Copy-Item -Recurse "skill/antigravity-mesh" "dist/$pkg/skill/"
+          Copy-Item README.md, LICENSE, PROTOCOL.md "dist/$pkg/"
+          Compress-Archive -Path "dist/$pkg" -DestinationPath "dist/$pkg.zip"
+          $hash = (Get-FileHash "dist/$pkg.zip" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $pkg.zip" | Out-File -Encoding ascii "dist/$pkg.zip.sha256"
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256

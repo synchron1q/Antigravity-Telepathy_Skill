@@ -1,0 +1,97 @@
+name: CI Build, Test & Static Analysis
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-format:
+    name: clang-format & clang-tidy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang tools & dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-format clang-tidy ninja-build libssl-dev
+      - name: Verify formatting
+        run: |
+          find include src tests -type f \( -name '*.hpp' -o -name '*.cpp' \) \
+            | xargs clang-format --dry-run --Werror
+      - name: Configure for clang-tidy
+        run: cmake --preset linux-release -DAGMESH_BUILD_TUI=OFF
+      - name: Run clang-tidy on core sources
+        run: |
+          clang-tidy -p build/linux-release src/core/*.cpp src/sanitizer/*.cpp src/net/protocol_codec.cpp
+
+  build-and-test:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x86_64 (Release + Tests)
+            os: ubuntu-24.04
+            preset: linux-release
+            extra_flags: ""
+          - name: Linux x86_64 (ASan + UBSan)
+            os: ubuntu-24.04
+            preset: linux-asan-ubsan
+            extra_flags: ""
+          - name: Linux arm64 (Release + Tests)
+            os: ubuntu-24.04-arm
+            preset: linux-release
+            extra_flags: ""
+          - name: macOS arm64 (Release + Tests)
+            os: macos-14
+            preset: macos-release
+            extra_flags: ""
+          - name: Windows x86_64 MSVC (Release + Tests)
+            os: windows-2022
+            preset: windows-msvc-release
+            extra_flags: ""
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build libssl-dev pkg-config
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        run: brew install ninja openssl@3
+
+      - name: Ensure MSVC OpenSSL on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:/Program Files/OpenSSL/include/openssl/evp.h") -and -not (Test-Path "C:/Program Files/OpenSSL-Win64/include/openssl/evp.h")) {
+            choco install openssl --no-progress -y
+          }
+
+      - name: Configure
+        run: |
+          EXTRA="${{ matrix.extra_flags }}"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            EXTRA="${EXTRA} -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
+            if [ -d "C:/Program Files/OpenSSL-Win64/include/openssl" ]; then
+              EXTRA="${EXTRA} -DOPENSSL_ROOT_DIR=C:/Program Files/OpenSSL-Win64"
+            elif [ -d "C:/Program Files/OpenSSL/include/openssl" ]; then
+              EXTRA="${EXTRA} -DOPENSSL_ROOT_DIR=C:/Program Files/OpenSSL"
+            fi
+          fi
+          cmake --preset ${{ matrix.preset }} ${EXTRA}
+        shell: bash
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }} --parallel
+
+      - name: Run Unit & 5-Node Integration Tests
+        run: ctest --preset ${{ matrix.preset }} --output-on-failure

@@ -1,0 +1,18 @@
+[Unit]
+Description=ag-mesh Multi-Host Connector & Context Sync Daemon for Google Antigravity
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/ag-mesh daemon --config /etc/ag-mesh/config.toml
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=3
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ag-mesh
+
+[Install]
+WantedBy=multi-user.target
